@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Model Farm Vision</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            color: #333;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 {
+            color: green;
+            font-style: italic;
+        }
+        h2 {
+            color: black;
+            font-weight: bold;
+        }
+        .subheading {
+            color: red;
+            font-style: italic;
+            margin-top: 10px;
+        }
+        .note {
+            color: red;
+            font-style: italic;
+            margin-top: 10px;
+        }
+        input[type="file"], button {
+            margin: 20px 0;
+        }
+        #uploadedImage {
+            border: 2px solid #2c6c2f;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        #label-container {
+            margin-top: 20px;
+        }
+        .label {
+            font-size: 12px;
+            color: white;
+            background-color: #4a9a5b;
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 3px;
+            margin: 5px;
+        }
+        #result {
+            font-size: 24px;
+            font-weight: bold;
+            padding: 20px;
+            border-radius: 5px;
+            color: white;
+            margin-top: 20px;
+        }
+        .healthy {
+            background-color: #4a9a5b;
+        }
+        .unhealthy {
+            background-color: #c72c2c;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="heading">Welcome to our AI-powered feature Farm Vision</h1>
+    <h2 id="subheading">Try out our new farm vision AI model. This feature allows you to check whether your crops are healthy or not. Click choose a file or snap a picture of the crop in your farm, wait a bit, and you will receive the response.</h2>
+    <p class="note">For now, try out cabbages.</p>
+    <button id="languageButton">Switch to French</button>
+    <br><br>
+    <input type="file" id="imageUpload" accept="image/*">
+    <br><br>
+    <img id="uploadedImage" width="200" style="display:none;">
+    <div id="label-container"></div>
+    <div id="result"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script>
+        const URL = "https://teachablemachine.withgoogle.com/models/_J-QmGaOP/";
+        let model, labelContainer, maxPredictions;
+        let currentLanguage = 'en'; // Start with English
+
+        const textContent = {
+            en: {
+                heading: "Welcome to our AI-powered feature Farm Vision",
+                subheading: "Try out our new farm vision AI model. This feature allows you to check whether your crops are healthy or not. Click choose a file or snap a picture of the crop in your farm, wait a bit, and you will receive the response.",
+                note: "For now, try out cabbages.",
+                switchToFrench: "Switch to French",
+                resultHealthy: "Healthy",
+                resultUnhealthy: "Unhealthy"
+            },
+            fr: {
+                heading: "Bienvenue dans notre fonctionnalité Farm Vision alimentée par l'IA",
+                subheading: "Essayez notre nouveau modèle d'IA farm vision. Cette fonctionnalité vous permet de vérifier si vos cultures sont en bonne santé ou non. Cliquez sur choisir un fichier ou prenez une photo de la culture dans votre ferme, attendez un peu, et vous recevrez la réponse.",
+                note: "Pour l'instant, essayez avec des choux.",
+                switchToFrench: "Passer à l'anglais",
+                resultHealthy: "Sain",
+                resultUnhealthy: "Malsain"
+            }
+        };
+
+        async function init() {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            labelContainer = document.getElementById("label-container");
+            for (let i = 0; i < maxPredictions; i++) {
+                const div = document.createElement("div");
+                div.classList.add("label");
+                div.id = "label-" + i;
+                labelContainer.appendChild(div);
+            }
+        }
+
+        init();
+
+        // Update language content on the webpage
+        function updateLanguage() {
+            const content = textContent[currentLanguage];
+            document.getElementById("heading").innerText = content.heading;
+            document.getElementById("subheading").innerText = content.subheading;
+            document.querySelector(".note").innerText = content.note;
+            document.getElementById("languageButton").innerText = content.switchToFrench;
+        }
+
+        // Toggle between English and French
+        document.getElementById("languageButton").addEventListener("click", () => {
+            currentLanguage = currentLanguage === 'en' ? 'fr' : 'en';
+            updateLanguage();
+        });
+
+        document.getElementById('imageUpload').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = async function(event) {
+                    const imgElement = document.getElementById('uploadedImage');
+                    imgElement.src = event.target.result;
+                    imgElement.style.display = 'block';
+                    
+                    imgElement.onload = async function() {
+                        const prediction = await model.predict(imgElement);
+                        displayPrediction(prediction);
+                    };
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function displayPrediction(predictions) {
+            predictions.forEach((prediction, index) => {
+                const labelElement = document.getElementById("label-" + index);
+                if (labelElement) {
+                    labelElement.innerHTML = `${prediction.className}: ${prediction.probability.toFixed(2)}`;
+                }
+            });
+
+            const unhealthyPrediction = predictions.find(pred => pred.className === 'Bad');
+            const healthyPrediction = predictions.find(pred => pred.className === 'Good');
+
+            const content = textContent[currentLanguage];
+
+            if (unhealthyPrediction && healthyPrediction) {
+                if (unhealthyPrediction.probability > healthyPrediction.probability) {
+                    document.getElementById('result').innerText = content.resultUnhealthy;
+                    document.getElementById('result').className = 'unhealthy';
+                } else {
+                    document.getElementById('result').innerText = content.resultHealthy;
+                    document.getElementById('result').className = 'healthy';
+                }
+            } else {
+                document.getElementById('result').innerText = 'Unable to determine result';
+                document.getElementById('result').className = '';
+            }
+        }
+
+        // Initialize page in English
+        updateLanguage();
+    </script>
+</body>
+</html>
